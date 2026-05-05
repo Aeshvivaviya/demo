@@ -239,20 +239,7 @@ function renderEmail(data: ApplicationData, task: GeneratedTask): string {
             </a>
           </div>
 
-          <div style="margin-top:16px;padding:14px 18px;background:#f8f9fa;border-radius:8px;border:1px solid #dee2e6;">
-            <h4 style="color:#1F4E79;margin:0 0 8px 0;">📊 Task Progress</h4>
-            <p style="margin:0 0 8px 0;font-size:13px;color:#555;">Your progress will be automatically tracked when you push code to the repository.</p>
-            <div style="background:#e9ecef;border-radius:20px;height:20px;overflow:hidden;">
-              <div style="background:linear-gradient(90deg,#1F4E79,#2E75B6);height:100%;width:0%;border-radius:20px;transition:width 0.3s;"></div>
-            </div>
-            <p style="margin:6px 0 0 0;font-size:12px;color:#888;text-align:right;">0% Complete</p>
-            <div style="margin-top:12px;text-align:center;">
-              <a href="https://demo-six-jet-95.vercel.app/progress?email=${encodeURIComponent(data.email)}"
-                 style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#1F4E79,#2E75B6);color:white;text-decoration:none;border-radius:8px;font-size:13px;font-weight:bold;letter-spacing:0.3px;">
-                📈 Check Live Progress
-              </a>
-            </div>
-          </div>
+
         </div>
 
         <p style="color:#888;font-size:13px;margin-bottom:0;">
