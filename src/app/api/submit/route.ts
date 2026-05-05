@@ -233,9 +233,9 @@ function renderEmail(data: ApplicationData, task: GeneratedTask): string {
           <div style="margin-top:20px;padding:14px 18px;background:#f0f7ff;border-radius:8px;border:1px solid #c8e0f7;">
             <h4 style="color:#1F4E79;margin:0 0 8px 0;">🔗 Task Repository</h4>
             <p style="margin:0;font-size:13px;color:#555;">Fork or clone the repository below to get started:</p>
-            <a href="https://github.com/Aeshvivaviya/demo" 
+            <a href="${process.env.GITHUB_REPO_URL || 'https://github.com/Aeshvivaviya/demo'}" 
                style="display:inline-block;margin-top:10px;padding:8px 16px;background:#1F4E79;color:white;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold;">
-              📂 github.com/Aeshvivaviya/demo
+              📂 ${(process.env.GITHUB_REPO_URL || 'https://github.com/Aeshvivaviya/demo').replace('https://', '')}
             </a>
           </div>
 
