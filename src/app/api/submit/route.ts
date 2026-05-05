@@ -246,6 +246,12 @@ function renderEmail(data: ApplicationData, task: GeneratedTask): string {
               <div style="background:linear-gradient(90deg,#1F4E79,#2E75B6);height:100%;width:0%;border-radius:20px;transition:width 0.3s;"></div>
             </div>
             <p style="margin:6px 0 0 0;font-size:12px;color:#888;text-align:right;">0% Complete</p>
+            <div style="margin-top:12px;text-align:center;">
+              <a href="https://demo-six-jet-95.vercel.app/progress?email=${encodeURIComponent(data.email)}"
+                 style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#1F4E79,#2E75B6);color:white;text-decoration:none;border-radius:8px;font-size:13px;font-weight:bold;letter-spacing:0.3px;">
+                📈 Check Live Progress
+              </a>
+            </div>
           </div>
         </div>
 
