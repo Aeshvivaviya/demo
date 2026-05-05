@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const submissions = store.getAll();
+  const submissions = await store.getAll();
   return NextResponse.json({ submissions });
 }
 
@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "id and status required" }, { status: 400 });
     }
 
-    const updated = store.updateStatus(id, status);
+    const updated = await store.updateStatus(id, status);
     if (!updated) {
       return NextResponse.json({ error: "Submission not found" }, { status: 404 });
     }
@@ -48,7 +48,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "id required" }, { status: 400 });
     }
 
-    const deleted = store.delete(id);
+    const deleted = await store.delete(id);
     if (!deleted) {
       return NextResponse.json({ error: "Submission not found" }, { status: 404 });
     }

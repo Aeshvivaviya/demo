@@ -27,18 +27,16 @@ export async function POST(req: NextRequest) {
     console.log(`📝 ${commits.length} commits`);
 
     // Find submission by repo URL or pusher email
-    const submissions = store.getAll();
+    const submissions = await store.getAll();
     const repoName = repoUrl.replace("https://github.com/", "").toLowerCase();
     
     const submission = submissions.find(s => {
-      // Match by githubRepo field
       if (s.githubRepo) {
         const storedRepo = s.githubRepo.replace("https://github.com/", "").toLowerCase();
         return storedRepo === repoName || repoUrl.toLowerCase().includes(storedRepo);
       }
-      // Fallback: match by email
       return s.email === pusherEmail;
-    }) || submissions[submissions.length - 1]; // Last submission as fallback
+    }) || submissions[submissions.length - 1];
     
     if (!submission) {
       console.log(`⚠️ No submission found for repo ${repoUrl}`);
@@ -47,11 +45,9 @@ export async function POST(req: NextRequest) {
 
     console.log(`📋 Matched submission: ${submission.email}`);
 
-    // Analyze files and calculate progress
     const progress = await analyzeTaskProgress(payload, submission.taskTitle || "");
     
-    // Update progress in store
-    store.updateProgress(submission.email, progress);
+    await store.updateProgress(submission.email, progress);
     
     console.log(`✅ Updated progress for ${pusherEmail}: ${progress}%`);
 

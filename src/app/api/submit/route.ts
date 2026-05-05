@@ -379,8 +379,8 @@ export async function POST(req: NextRequest) {
     await sendEmail(applicationData, task);
     console.log("✅ Email sent successfully.");
 
-    // Save to in-memory store for admin panel
-    store.add({
+    // Save to Redis store for admin panel
+    await store.add({
       name,
       email,
       role,

@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
-  const submissions = store.getAll();
+  const submissions = await store.getAll();
   const submission = submissions.find(
     (s) => s.email.toLowerCase() === email.toLowerCase()
   );
