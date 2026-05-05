@@ -1,6 +1,6 @@
 {
-  "buildCommand": "cd task-manager && npm run build",
-  "outputDirectory": "task-manager/.next",
-  "installCommand": "cd task-manager && npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
   "framework": "nextjs"
 }
