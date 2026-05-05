@@ -31,17 +31,26 @@ export async function POST(req: NextRequest) {
     // Find submission by repo URL or pusher email
     const submissions = await store.getAll();
     const repoName = repoUrl.replace("https://github.com/", "").toLowerCase();
+
+    console.log(`📋 Total submissions in store: ${submissions.length}`);
+    console.log(`📋 Pusher email: ${pusherEmail}`);
     
-    const submission = submissions.find(s => {
+    let submission = submissions.find(s => {
       if (s.githubRepo) {
         const storedRepo = s.githubRepo.replace("https://github.com/", "").toLowerCase();
         return storedRepo === repoName || repoUrl.toLowerCase().includes(storedRepo);
       }
-      return s.email === pusherEmail;
-    }) || submissions[submissions.length - 1];
+      return s.email.toLowerCase() === pusherEmail.toLowerCase();
+    });
+
+    // Fallback: use most recent submission
+    if (!submission && submissions.length > 0) {
+      submission = submissions[0]; // most recent is first (store adds to front)
+      console.log(`⚠️ No exact match, using most recent submission: ${submission.email}`);
+    }
     
     if (!submission) {
-      console.log(`⚠️ No submission found for repo ${repoUrl}`);
+      console.log(`⚠️ No submission found at all in store`);
       return NextResponse.json({ message: "No matching submission" }, { status: 200 });
     }
 
