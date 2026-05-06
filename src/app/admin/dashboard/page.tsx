@@ -12,6 +12,7 @@ interface Submission {
   skills: string;
   resumeFilename?: string;
   taskTitle?: string;
+  githubRepo?: string;
   submittedAt: string;
   status: "pending" | "reviewed" | "rejected";
 }
@@ -344,6 +345,23 @@ export default function AdminDashboard() {
                         <p className="text-slate-300 text-sm leading-relaxed">{item.value}</p>
                       </div>
                     ))}
+
+                    {/* GitHub Repo Link */}
+                    {selected.githubRepo && (
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">GitHub Repo</p>
+                        <a
+                          href={selected.githubRepo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-xs font-semibold text-cyan-400 border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 px-3 py-2 rounded-lg transition-all duration-200 break-all"
+                        >
+                          <span>🐙</span>
+                          <span className="truncate">{selected.githubRepo.replace("https://github.com/", "")}</span>
+                          <span className="flex-shrink-0">↗</span>
+                        </a>
+                      </div>
+                    )}
 
                     {/* Actions */}
                     <div className="pt-2 border-t border-slate-800">
