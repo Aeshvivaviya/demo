@@ -100,6 +100,45 @@ async function createGitHubRepo(
     }
   );
 
+  // 3. Register webhook so every push triggers progress email
+  const webhookUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook/github`
+    : null;
+
+  if (webhookUrl) {
+    const hookRes = await fetch(
+      `https://api.github.com/repos/${username}/${repoName}/hooks`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        body: JSON.stringify({
+          name: "web",
+          active: true,
+          events: ["push"],
+          config: {
+            url: webhookUrl,
+            content_type: "json",
+            insecure_ssl: "0",
+          },
+        }),
+      }
+    );
+
+    if (hookRes.ok) {
+      console.log(`🔗 Webhook registered on ${repoName} → ${webhookUrl}`);
+    } else {
+      const hookErr = await hookRes.json();
+      console.warn("⚠️ Webhook registration failed:", hookErr.message);
+    }
+  } else {
+    console.warn("⚠️ NEXT_PUBLIC_APP_URL not set — webhook not registered");
+  }
+
   console.log(`✅ GitHub repo created: ${repoUrl}`);
   return repoUrl;
 }
