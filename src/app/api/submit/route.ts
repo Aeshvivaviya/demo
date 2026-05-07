@@ -13,6 +13,7 @@ interface ApplicationData {
   resumeBuffer?: Buffer;
   resumeFilename?: string;
   resumeMimeType?: string;
+  cvText?: string; // extracted CV text
 }
 
 interface GeneratedTask {
@@ -25,6 +26,142 @@ interface GeneratedTask {
   difficulty: string;
 }
 
+// ── Role Category Detection ────────────────────────────────────────────────
+type RoleCategory = "design" | "development" | "qa" | "devops" | "product";
+
+function detectRoleCategory(role: string): RoleCategory {
+  const r = role.toLowerCase();
+  if (r.includes("designer") || r.includes("ui") || r.includes("ux") || r.includes("visual")) {
+    return "design";
+  }
+  if (r.includes("qa") || r.includes("tester") || r.includes("sdet") || r.includes("quality")) {
+    return "qa";
+  }
+  if (r.includes("devops") || r.includes("sre") || r.includes("cloud") || r.includes("infrastructure")) {
+    return "devops";
+  }
+  if (r.includes("product manager") || r.includes("product owner") || r.includes("business analyst") || r.includes("pm ")) {
+    return "product";
+  }
+  // Default: development
+  return "development";
+}
+
+// ── Seniority Detection ────────────────────────────────────────────────────
+function detectSeniority(experience: string): { label: string; years: number } {
+  const e = experience.toLowerCase();
+  if (e.includes("7+") || e.includes("lead") || e.includes("architect")) return { label: "Senior", years: 7 };
+  if (e.includes("5") || e.includes("senior")) return { label: "Senior", years: 5 };
+  if (e.includes("3")) return { label: "Mid-level", years: 3 };
+  if (e.includes("1")) return { label: "Junior", years: 1 };
+  return { label: "Junior", years: 0 };
+}
+
+// ── Category-specific prompt builder ──────────────────────────────────────
+function buildPrompt(data: ApplicationData, category: RoleCategory, seniority: { label: string; years: number }): string {
+  const cvSection = data.cvText
+    ? `\nExtracted CV Summary:\n${data.cvText.slice(0, 800)}\n`
+    : "";
+
+  const categoryInstructions: Record<RoleCategory, string> = {
+    design: `
+- This is a DESIGN role. Generate a UI/UX design task ONLY.
+- Task must involve: Figma wireframes, user flows, design systems, prototyping, or visual design.
+- DO NOT include any coding, programming, or GitHub repo tasks.
+- Deliverables should be Figma files, design specs, or PDF presentations.
+- Junior: Simple screen redesign or component design (~3 hours).
+- Mid-level: Full user flow with wireframes + prototype (~6 hours).
+- Senior: Design system or end-to-end UX audit (~8 hours).`,
+
+    development: `
+- This is a DEVELOPMENT role. Generate a coding task.
+- Match the tech stack to the candidate's skills and role.
+- Junior: Small CRUD app or UI component (~3 hours).
+- Mid-level: Full feature with API + frontend (~6 hours).
+- Senior: Architecture design + implementation (~8 hours).
+- Deliverable: GitHub repository link.`,
+
+    qa: `
+- This is a QA/Testing role. Generate a testing task ONLY.
+- Task must involve: writing test cases, automation scripts, bug reports, or test plans.
+- Tools: Selenium, Cypress, Jest, Postman, or manual testing.
+- Junior: Write test cases for a simple feature (~3 hours).
+- Mid-level: Build an automation test suite (~6 hours).
+- Senior: Design a full QA strategy + automation framework (~8 hours).`,
+
+    devops: `
+- This is a DevOps/Infrastructure role. Generate a CI/CD or infrastructure task.
+- Task must involve: Docker, Kubernetes, CI/CD pipelines, cloud infrastructure, or monitoring.
+- Junior: Write a Dockerfile + basic CI pipeline (~3 hours).
+- Mid-level: Set up full CI/CD with deployment (~6 hours).
+- Senior: Design scalable infrastructure with IaC (~8 hours).`,
+
+    product: `
+- This is a Product Management role. Generate a product/strategy task.
+- Task must involve: PRD writing, roadmap planning, user story creation, or competitive analysis.
+- NO coding required.
+- Junior: Write user stories for a feature (~3 hours).
+- Mid-level: Create a mini PRD for a product feature (~6 hours).
+- Senior: Full product roadmap + go-to-market strategy (~8 hours).`,
+  };
+
+  return `You are a senior hiring manager at Sensussoft.
+Generate a practical take-home assessment task for this candidate.
+
+Candidate Profile:
+- Name: ${data.name}
+- Role Applied: ${data.role}
+- Experience: ${data.experience} (approx ${seniority.years} years — ${seniority.label} level)
+- Skills: ${data.skills}
+- Role Category: ${category}
+${cvSection}
+Task Generation Rules:
+${categoryInstructions[category]}
+
+STRICT RULES:
+- The task MUST match the role category exactly.
+- A designer must NEVER receive a coding task.
+- A developer must NEVER receive a Figma/design task.
+- Use the candidate's actual skills from their profile and CV.
+- Make the task feel realistic and specific to their background.
+- Deadline: 3 days.
+- Include exactly 4 evaluation criteria.
+
+Return ONLY valid JSON with these exact keys (no markdown, no code fences):
+{
+  "title": "string",
+  "difficulty": "${seniority.label}",
+  "scenario": "string (2-3 sentences describing the task context)",
+  "requirements": ["string", "string", "string", "string"],
+  "deliverables": ["string", "string"],
+  "evaluation_criteria": ["string", "string", "string", "string"],
+  "deadline_days": 3
+}`;
+}
+
+// ── CV Text Extraction ─────────────────────────────────────────────────────
+async function extractCvText(buffer: Buffer, mimeType: string): Promise<string> {
+  try {
+    if (mimeType === "application/pdf") {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require("pdf-parse");
+      const result = await pdfParse(buffer);
+      return result.text?.slice(0, 1500) || "";
+    }
+    if (
+      mimeType === "application/msword" ||
+      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      const mammoth = await import("mammoth");
+      const result = await mammoth.extractRawText({ buffer });
+      return result.value?.slice(0, 1500) || "";
+    }
+  } catch (err) {
+    console.warn("⚠️ CV text extraction failed:", err);
+  }
+  return "";
+}
+
 // ── GitHub: Create a unique repo for the candidate ────────────────────────
 async function createGitHubRepo(
   data: ApplicationData,
@@ -34,25 +171,14 @@ async function createGitHubRepo(
   const username = process.env.GITHUB_USER;
 
   if (!token || !username) {
-    // Fallback to static demo repo if GitHub creds not set
     return process.env.GITHUB_REPO_URL || "https://github.com/Aeshvivaviya/demo";
   }
 
-  // Build a clean repo name: firstname-lastname-role-timestamp-demo-task
-  const cleanName = data.name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-  const cleanRole = data.role
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
+  const cleanName = data.name.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim().replace(/\s+/g, "-");
+  const cleanRole = data.role.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim().replace(/\s+/g, "-");
   const timestamp = Date.now();
   const repoName = `${cleanName}-${cleanRole}-${timestamp}-demo-task`;
 
-  // 1. Create the repo
   const createRes = await fetch("https://api.github.com/user/repos", {
     method: "POST",
     headers: {
@@ -63,29 +189,44 @@ async function createGitHubRepo(
     },
     body: JSON.stringify({
       name: repoName,
-      description: `Technical assignment repository for ${data.name} (${data.role})`,
+      description: `Technical assignment for ${data.name} (${data.role})`,
       private: false,
-      auto_init: true, // creates default README
+      auto_init: true,
     }),
   });
 
   if (!createRes.ok) {
-    const err = await createRes.json();
-    console.error("GitHub repo creation failed:", err);
+    console.error("GitHub repo creation failed:", await createRes.json());
     return process.env.GITHUB_REPO_URL || "https://github.com/Aeshvivaviya/demo";
   }
 
   const repoData = await createRes.json();
   const repoUrl: string = repoData.html_url;
 
-  // 2. Add TASK.md with full task details
+  // Add TASK.md
   const taskContent = buildTaskMarkdown(data, task);
-  const taskContentB64 = Buffer.from(taskContent).toString("base64");
+  await fetch(`https://api.github.com/repos/${username}/${repoName}/contents/TASK.md`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    body: JSON.stringify({
+      message: "Add TASK.md",
+      content: Buffer.from(taskContent).toString("base64"),
+    }),
+  });
 
-  await fetch(
-    `https://api.github.com/repos/${username}/${repoName}/contents/TASK.md`,
-    {
-      method: "PUT",
+  // Register webhook
+  const webhookUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook/github`
+    : null;
+
+  if (webhookUrl) {
+    const hookRes = await fetch(`https://api.github.com/repos/${username}/${repoName}/hooks`, {
+      method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
@@ -93,49 +234,14 @@ async function createGitHubRepo(
         "X-GitHub-Api-Version": "2022-11-28",
       },
       body: JSON.stringify({
-        message: "Add TASK.md",
-        content: taskContentB64,
+        name: "web",
+        active: true,
+        events: ["push"],
+        config: { url: webhookUrl, content_type: "json", insecure_ssl: "0" },
       }),
-    }
-  );
-
-  // 3. Register webhook so every push triggers progress email
-  const webhookUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook/github`
-    : null;
-
-  if (webhookUrl) {
-    const hookRes = await fetch(
-      `https://api.github.com/repos/${username}/${repoName}/hooks`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-          "Content-Type": "application/json",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
-        body: JSON.stringify({
-          name: "web",
-          active: true,
-          events: ["push"],
-          config: {
-            url: webhookUrl,
-            content_type: "json",
-            insecure_ssl: "0",
-          },
-        }),
-      }
-    );
-
-    if (hookRes.ok) {
-      console.log(`🔗 Webhook registered on ${repoName} → ${webhookUrl}`);
-    } else {
-      const hookErr = await hookRes.json();
-      console.warn("⚠️ Webhook registration failed:", hookErr.message);
-    }
-  } else {
-    console.warn("⚠️ NEXT_PUBLIC_APP_URL not set — webhook not registered");
+    });
+    if (hookRes.ok) console.log(`🔗 Webhook registered → ${webhookUrl}`);
+    else console.warn("⚠️ Webhook registration failed");
   }
 
   console.log(`✅ GitHub repo created: ${repoUrl}`);
@@ -179,7 +285,7 @@ ${evalList}
 ---
 
 ## Submission
-Push your code to this repository and notify the Sensussoft hiring team.
+Submit your work as per the deliverables above and notify the Sensussoft hiring team.
 
 *This task was AI-generated by Sensussoft Hiring System based on the candidate's profile.*
 `;
@@ -187,54 +293,26 @@ Push your code to this repository and notify the Sensussoft hiring team.
 
 // ── OpenRouter: Generate custom task as JSON ──────────────────────────────
 async function generateTask(data: ApplicationData): Promise<GeneratedTask> {
-  // Parse experience years from string like "1-2 years", "7+ years"
-  const expStr = data.experience.toLowerCase();
-  let expYears = 0;
-  if (expStr.includes("7+") || expStr.includes("lead") || expStr.includes("architect")) expYears = 7;
-  else if (expStr.includes("5") || expStr.includes("senior")) expYears = 5;
-  else if (expStr.includes("3")) expYears = 3;
-  else if (expStr.includes("1")) expYears = 1;
+  const category = detectRoleCategory(data.role);
+  const seniority = detectSeniority(data.experience);
+  const prompt = buildPrompt(data, category, seniority);
 
-  const prompt = `You are a senior engineering manager at Sensussoft.
-Generate a practical take-home task for this candidate.
+  console.log(`🎯 Role category: ${category} | Seniority: ${seniority.label}`);
 
-Candidate:
-- Name: ${data.name}
-- Role applied: ${data.role}
-- Experience: ${data.experience} (approx ${expYears} years)
-- Skills: ${data.skills}
-
-Rules:
-- Junior (0-2y): small CRUD/UI exercise, ~3 hours of work.
-- Mid (3-5y): full feature with API + frontend, ~6 hours.
-- Senior (6+y): architecture problem + small implementation, ~8 hours.
-- Match the tech stack to the role applied.
-- Deliverable: a GitHub repo link.
-- Deadline: 3 days.
-- Include 4 evaluation criteria.
-
-Return ONLY valid JSON with these exact keys:
-{
-  "title": "string",
-  "difficulty": "Junior | Mid-level | Senior",
-  "scenario": "string (2-3 sentences)",
-  "requirements": ["string", "string", "string", "string"],
-  "deliverables": ["string", "string"],
-  "evaluation_criteria": ["string", "string", "string", "string"],
-  "deadline_days": number
-}
-
-No markdown, no code fences, just raw JSON.`;
-
-  // Models to try in order (fallback chain)
+  // Use openrouter/free router — automatically picks any available free model
+  // Fallback to specific free models if router fails
   const modelsToTry = [
-    "meta-llama/llama-3.3-70b-instruct",
-    "meta-llama/llama-3.1-8b-instruct",
-    "google/gemma-2-9b-it",
+    "openrouter/free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemma-4-31b-it:free",
+    "nousresearch/hermes-3-llama-3.1-405b:free",
+    "openai/gpt-oss-20b:free",
+    "openai/gpt-oss-120b:free",
   ];
 
   for (const modelName of modelsToTry) {
     try {
+      console.log(`🤖 Trying model: ${modelName}`);
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -258,11 +336,17 @@ No markdown, no code fences, just raw JSON.`;
 
       const json = await res.json();
       let text = json.choices[0]?.message?.content || "";
-      // Strip markdown code fences if model wraps JSON
+
+      // Strip markdown code fences + thinking tags (some models add <think>...</think>)
+      text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
       text = text.replace(/```json|```/g, "").trim();
 
-      const parsed: GeneratedTask = JSON.parse(text);
-      console.log(`✅ Task generated with model: ${modelName}`);
+      // Extract JSON object if surrounded by extra text
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("No JSON object found in response");
+
+      const parsed: GeneratedTask = JSON.parse(jsonMatch[0]);
+      console.log(`✅ Task generated with model: ${modelName} — "${parsed.title}"`);
       return parsed;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -270,7 +354,7 @@ No markdown, no code fences, just raw JSON.`;
     }
   }
 
-  throw new Error("All AI models failed. Please check your OPENROUTER_API_KEY.");
+  throw new Error("All AI models failed. Please check your OPENROUTER_API_KEY or add credits at openrouter.ai/settings/credits");
 }
 
 // ── PDFKit: Generate PDF buffer ────────────────────────────────────────────
@@ -283,21 +367,14 @@ async function generatePDF(data: ApplicationData, task: GeneratedTask): Promise<
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    // ── Header ──
     doc.rect(0, 0, doc.page.width, 80).fill("#1F4E79");
-    doc.fillColor("white").fontSize(22).font("Times-Bold")
-      .text("Sensussoft — Practical Task", 50, 25);
-    doc.fontSize(11).font("Times-Roman")
-      .text("AI-Generated Candidate Assessment", 50, 52);
-
+    doc.fillColor("white").fontSize(22).font("Times-Bold").text("Sensussoft — Practical Task", 50, 25);
+    doc.fontSize(11).font("Times-Roman").text("AI-Generated Candidate Assessment", 50, 52);
     doc.moveDown(3);
 
-    // ── Candidate Info ──
-    doc.fillColor("#1F4E79").fontSize(14).font("Times-Bold")
-      .text("Candidate Details");
+    doc.fillColor("#1F4E79").fontSize(14).font("Times-Bold").text("Candidate Details");
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#2E75B6").lineWidth(1).stroke();
     doc.moveDown(0.5);
-
     doc.fillColor("#333").fontSize(11).font("Times-Roman");
     doc.text(`Name:        ${data.name}`);
     doc.text(`Email:       ${data.email}`);
@@ -306,79 +383,55 @@ async function generatePDF(data: ApplicationData, task: GeneratedTask): Promise<
     doc.text(`Skills:      ${data.skills}`);
     doc.moveDown(1.5);
 
-    // ── Difficulty Badge ──
-    const diffColor = task.difficulty === "Senior" ? "#c0392b" :
-      task.difficulty === "Mid-level" ? "#e67e22" : "#27ae60";
+    const diffColor = task.difficulty === "Senior" ? "#c0392b" : task.difficulty === "Mid-level" ? "#e67e22" : "#27ae60";
     doc.roundedRect(50, doc.y, 100, 22, 5).fill(diffColor);
-    doc.fillColor("white").fontSize(10).font("Times-Bold")
-      .text(task.difficulty, 50, doc.y - 17, { width: 100, align: "center" });
+    doc.fillColor("white").fontSize(10).font("Times-Bold").text(task.difficulty, 50, doc.y - 17, { width: 100, align: "center" });
     doc.moveDown(1.5);
 
-    // ── Task Title ──
-    doc.fillColor("#1F4E79").fontSize(16).font("Times-Bold")
-      .text(task.title);
+    doc.fillColor("#1F4E79").fontSize(16).font("Times-Bold").text(task.title);
     doc.moveDown(0.5);
-
-    // ── Scenario ──
-    doc.fillColor("#555").fontSize(11).font("Times-Roman")
-      .text(task.scenario, { lineGap: 4 });
+    doc.fillColor("#555").fontSize(11).font("Times-Roman").text(task.scenario, { lineGap: 4 });
     doc.moveDown(1.5);
 
-    // ── Requirements ──
     doc.fillColor("#1F4E79").fontSize(13).font("Times-Bold").text("Requirements");
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#2E75B6").lineWidth(0.5).stroke();
     doc.moveDown(0.5);
     doc.fillColor("#333").fontSize(11).font("Times-Roman");
-    task.requirements.forEach((req, i) => {
-      doc.text(`${i + 1}.  ${req}`, { lineGap: 3 });
-    });
+    task.requirements.forEach((req, i) => doc.text(`${i + 1}.  ${req}`, { lineGap: 3 }));
     doc.moveDown(1.5);
 
-    // ── Deliverables ──
     doc.fillColor("#1F4E79").fontSize(13).font("Times-Bold").text("Deliverables");
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#2E75B6").lineWidth(0.5).stroke();
     doc.moveDown(0.5);
     doc.fillColor("#333").fontSize(11).font("Times-Roman");
-    task.deliverables.forEach((d) => {
-      doc.text(`•  ${d}`, { lineGap: 3 });
-    });
+    task.deliverables.forEach((d) => doc.text(`•  ${d}`, { lineGap: 3 }));
     doc.moveDown(1.5);
 
-    // ── Evaluation Criteria ──
     doc.fillColor("#1F4E79").fontSize(13).font("Times-Bold").text("Evaluation Criteria");
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#2E75B6").lineWidth(0.5).stroke();
     doc.moveDown(0.5);
     doc.fillColor("#333").fontSize(11).font("Times-Roman");
-    task.evaluation_criteria.forEach((c) => {
-      doc.text(`✓  ${c}`, { lineGap: 3 });
-    });
+    task.evaluation_criteria.forEach((c) => doc.text(`✓  ${c}`, { lineGap: 3 }));
     doc.moveDown(1.5);
 
-    // ── Deadline ──
     doc.rect(50, doc.y, 495, 36).fill("#EBF3FB");
     doc.fillColor("#1F4E79").fontSize(12).font("Times-Bold")
       .text(`Deadline: ${task.deadline_days} days from receipt of this email`, 60, doc.y - 26);
     doc.moveDown(2);
 
-    // ── Footer ──
     doc.fillColor("#999").fontSize(9).font("Times-Roman")
-      .text("This task was AI-generated by Sensussoft Hiring System based on the candidate's profile.",
-        50, doc.page.height - 50, { align: "center" });
+      .text("This task was AI-generated by Sensussoft Hiring System based on the candidate's profile.", 50, doc.page.height - 50, { align: "center" });
 
     doc.end();
   });
 }
 
-
 function renderEmail(data: ApplicationData, task: GeneratedTask, repoUrl: string): string {
-  const list = (arr: string[]) =>
-    arr.map((x) => `<li style="margin:6px 0">${x}</li>`).join("");
-
-  const difficultyColor =
-    task.difficulty === "Senior" ? "#c0392b" :
-    task.difficulty === "Mid-level" ? "#e67e22" : "#27ae60";
-
+  const list = (arr: string[]) => arr.map((x) => `<li style="margin:6px 0">${x}</li>`).join("");
+  const difficultyColor = task.difficulty === "Senior" ? "#c0392b" : task.difficulty === "Mid-level" ? "#e67e22" : "#27ae60";
   const repoDisplay = repoUrl.replace("https://", "");
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const progressUrl = `${appUrl}/progress?email=${encodeURIComponent(data.email)}`;
 
   return `
     <div style="font-family:Arial,sans-serif;max-width:640px;color:#333;margin:0 auto;">
@@ -386,42 +439,37 @@ function renderEmail(data: ApplicationData, task: GeneratedTask, repoUrl: string
         <h1 style="color:white;margin:0;font-size:26px;">🎯 Your Practical Task</h1>
         <p style="color:rgba(255,255,255,0.85);margin:8px 0 0 0;">Sensussoft Hiring Team</p>
       </div>
-
       <div style="background:#f8f9fa;padding:28px;border-radius:0 0 12px 12px;border:1px solid #e9ecef;">
         <h2 style="color:#1F4E79;margin-top:0;">Hi ${data.name},</h2>
         <p>Thanks for applying to <b>Sensussoft</b> for the <b>${data.role}</b> role.
-        Below is a short practical task. Please complete it within
-        <b>${task.deadline_days} days</b> and reply to this email with your submission.</p>
-
+        Below is your personalised assessment task. Please complete it within <b>${task.deadline_days} days</b>.</p>
         <div style="background:white;border-radius:8px;padding:20px;margin:20px 0;border:1px solid #dee2e6;">
           <h3 style="color:#2E75B6;margin-top:0;">${task.title}</h3>
-          <span style="background:${difficultyColor};color:white;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;">
-            ${task.difficulty}
-          </span>
+          <span style="background:${difficultyColor};color:white;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;">${task.difficulty}</span>
           <p style="margin-top:14px;">${task.scenario}</p>
-
           <h4 style="color:#1F4E79;">📋 Requirements</h4>
           <ul style="padding-left:20px;">${list(task.requirements)}</ul>
-
           <h4 style="color:#1F4E79;">📦 Deliverables</h4>
           <ul style="padding-left:20px;">${list(task.deliverables)}</ul>
-
           <h4 style="color:#1F4E79;">✅ How we will evaluate</h4>
           <ul style="padding-left:20px;">${list(task.evaluation_criteria)}</ul>
-
           <div style="margin-top:20px;padding:14px 18px;background:#f0f7ff;border-radius:8px;border:1px solid #c8e0f7;">
             <h4 style="color:#1F4E79;margin:0 0 8px 0;">🔗 Your Task Repository</h4>
-            <p style="margin:0;font-size:13px;color:#555;">A dedicated GitHub repository has been created for you. Push your code here:</p>
-            <a href="${repoUrl}" 
-               style="display:inline-block;margin-top:10px;padding:8px 16px;background:#1F4E79;color:white;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold;">
+            <p style="margin:0;font-size:13px;color:#555;">A dedicated GitHub repository has been created for you:</p>
+            <a href="${repoUrl}" style="display:inline-block;margin-top:10px;padding:8px 16px;background:#1F4E79;color:white;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold;">
               📂 ${repoDisplay}
             </a>
           </div>
+          <div style="margin-top:14px;padding:14px 18px;background:#f0fff4;border-radius:8px;border:1px solid #b7ebc8;">
+            <h4 style="color:#1a7a3c;margin:0 0 8px 0;">📊 Track Your Progress</h4>
+            <p style="margin:0;font-size:13px;color:#555;">Monitor your task completion in real-time:</p>
+            <a href="${progressUrl}" style="display:inline-block;margin-top:10px;padding:8px 16px;background:#1a7a3c;color:white;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold;">
+              📈 View Progress
+            </a>
+          </div>
         </div>
-
         <p style="color:#888;font-size:13px;margin-bottom:0;">
-          Good luck!<br/>
-          <b>Sensussoft Hiring Team</b><br/>
+          Good luck!<br/><b>Sensussoft Hiring Team</b><br/>
           <em>This task was AI-generated based on your specific profile.</em>
         </p>
       </div>
@@ -429,7 +477,7 @@ function renderEmail(data: ApplicationData, task: GeneratedTask, repoUrl: string
   `;
 }
 
-// ── Nodemailer: Send email with PDF attachment ─────────────────────────────
+// ── Nodemailer: Send email ─────────────────────────────────────────────────
 async function sendEmail(data: ApplicationData, task: GeneratedTask, repoUrl: string): Promise<void> {
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -439,21 +487,14 @@ async function sendEmail(data: ApplicationData, task: GeneratedTask, repoUrl: st
     },
   });
 
-  // Generate PDF
   console.log("📄 Generating PDF...");
   const pdfBuffer = await generatePDF(data, task);
   const pdfFilename = `Sensussoft_Task_${data.name.replace(/\s+/g, "_")}.pdf`;
 
-  // Build attachments — always include the generated task PDF
   const attachments: { filename: string; content: Buffer; contentType: string }[] = [
-    {
-      filename: pdfFilename,
-      content: pdfBuffer,
-      contentType: "application/pdf",
-    },
+    { filename: pdfFilename, content: pdfBuffer, contentType: "application/pdf" },
   ];
 
-  // Also attach the candidate's resume if provided
   if (data.resumeBuffer && data.resumeFilename) {
     attachments.push({
       filename: data.resumeFilename,
@@ -475,11 +516,11 @@ async function sendEmail(data: ApplicationData, task: GeneratedTask, repoUrl: st
 // ── Main API Handler ───────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    // Parse multipart/form-data (resume upload) or fall back to JSON
     let name: string, email: string, role: string, experience: string, skills: string;
     let resumeBuffer: Buffer | undefined;
     let resumeFilename: string | undefined;
     let resumeMimeType: string | undefined;
+    let cvText = "";
 
     const contentType = req.headers.get("content-type") || "";
 
@@ -494,10 +535,22 @@ export async function POST(req: NextRequest) {
       const resumeEntry = formData.get("resume");
       if (resumeEntry && typeof resumeEntry !== "string") {
         const file = resumeEntry as File;
+
+        // File size check: max 5MB
+        if (file.size > 5 * 1024 * 1024) {
+          return NextResponse.json({ error: "Resume file must be under 5MB." }, { status: 400 });
+        }
+
         const arrayBuffer = await file.arrayBuffer();
         resumeBuffer   = Buffer.from(arrayBuffer);
         resumeFilename = file.name;
         resumeMimeType = file.type;
+
+        // Extract CV text for AI context
+        console.log("📖 Extracting CV text...");
+        cvText = await extractCvText(resumeBuffer, resumeMimeType);
+        if (cvText) console.log(`✅ CV text extracted (${cvText.length} chars)`);
+        else console.log("⚠️ CV text extraction returned empty");
       }
     } else {
       const body: ApplicationData = await req.json();
@@ -509,13 +562,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (!process.env.OPENROUTER_API_KEY || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-      return NextResponse.json(
-        { error: "Server configuration missing. Check environment variables." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Server configuration missing. Check environment variables." }, { status: 500 });
     }
 
-    // Optional webhook secret check (if WEBHOOK_SECRET is set in env)
+    // Webhook secret check
     if (process.env.WEBHOOK_SECRET) {
       const secret = req.headers.get("x-webhook-secret");
       if (secret !== process.env.WEBHOOK_SECRET) {
@@ -525,35 +575,31 @@ export async function POST(req: NextRequest) {
 
     const applicationData: ApplicationData = {
       name, email, role, experience, skills,
-      resumeBuffer, resumeFilename, resumeMimeType,
+      resumeBuffer, resumeFilename, resumeMimeType, cvText,
     };
 
+    const category = detectRoleCategory(role);
+    const seniority = detectSeniority(experience);
+
     console.log(`\n=== New candidate received ===`);
-    console.log(`Name: ${name}`);
-    console.log(`Role: ${role}`);
-    console.log(`Experience: ${experience}`);
-    console.log(`Skills: ${skills}`);
+    console.log(`Name: ${name} | Role: ${role} | Category: ${category} | Seniority: ${seniority.label}`);
+    console.log(`Experience: ${experience} | Skills: ${skills}`);
     console.log(`Resume: ${resumeFilename ?? "not provided"}`);
 
-    console.log("🤖 Asking Gemini to generate a task...");
+    console.log("🤖 Generating AI task...");
     const task = await generateTask(applicationData);
-    console.log("Task generated:", task.title);
+    console.log(`✅ Task generated: "${task.title}"`);
 
-    console.log("🐙 Creating GitHub repo for candidate...");
+    console.log("🐙 Creating GitHub repo...");
     const repoUrl = await createGitHubRepo(applicationData, task);
-    console.log(`✅ Repo ready: ${repoUrl}`);
+    console.log(`✅ Repo: ${repoUrl}`);
 
     console.log(`📧 Sending email to ${email}...`);
     await sendEmail(applicationData, task, repoUrl);
-    console.log("✅ Email sent successfully.");
+    console.log("✅ Email sent.");
 
-    // Save to Redis store for admin panel
     await store.add({
-      name,
-      email,
-      role,
-      experience,
-      skills,
+      name, email, role, experience, skills,
       resumeFilename,
       taskTitle: task.title,
       githubRepo: repoUrl,
@@ -563,17 +609,13 @@ export async function POST(req: NextRequest) {
       success: true,
       message: "Task generated and emailed successfully",
       task_title: task.title,
+      category,
+      seniority: seniority.label,
     });
 
   } catch (error: unknown) {
-    let errorMessage = "Internal server error";
-    let errorStack = undefined;
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      errorStack = error.stack;
-    } else if (typeof error === "string") {
-      errorMessage = error;
-    }
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
     console.error("❌ Error:", error);
     return NextResponse.json({ error: errorMessage, stack: errorStack }, { status: 500 });
   }

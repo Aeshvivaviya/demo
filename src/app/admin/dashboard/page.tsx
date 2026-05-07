@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 
 interface Submission {
   id: string;
@@ -24,7 +23,6 @@ const STATUS_CONFIG = {
 };
 
 export default function AdminDashboard() {
-  const router = useRouter();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -36,10 +34,6 @@ export default function AdminDashboard() {
   const fetchSubmissions = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/submissions");
-      if (res.status === 401) {
-        router.push("/admin");
-        return;
-      }
       const data = await res.json();
       setSubmissions(data.submissions ?? []);
     } catch {
@@ -47,16 +41,11 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     fetchSubmissions();
   }, [fetchSubmissions]);
-
-  const handleLogout = async () => {
-    await fetch("/api/admin/logout", { method: "POST" });
-    router.push("/admin");
-  };
 
   const updateStatus = async (id: string, status: Submission["status"]) => {
     setActionLoading(id + status);
@@ -146,12 +135,6 @@ export default function AdminDashboard() {
               title="Refresh"
             >
               🔄
-            </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-slate-400 hover:text-red-400 transition-colors text-sm border border-slate-700 hover:border-red-500/40 px-4 py-2 rounded-lg"
-            >
-              <span>⎋</span> Logout
             </button>
           </div>
         </div>

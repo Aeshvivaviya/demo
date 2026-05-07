@@ -15,6 +15,7 @@ export default function Home() {
   const [dragOver, setDragOver] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [taskResult, setTaskResult] = useState<{ category: string; seniority: string; task_title: string } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -28,6 +29,10 @@ export default function Home() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    // Clear error for this field when user starts typing
+    if (formErrors[e.target.name as keyof typeof formErrors]) {
+      setFormErrors({ ...formErrors, [e.target.name]: undefined });
+    }
   };
 
   const validateFile = (file: File): boolean => {
@@ -62,12 +67,80 @@ export default function Home() {
     else setResumeFile(null);
   };
 
+  const [formErrors, setFormErrors] = useState<{ role?: string; skills?: string; experience?: string }>({});
+
+  // Valid role keywords
+  const validRoleKeywords = [
+    "developer", "engineer", "designer", "ui", "ux", "frontend", "backend",
+    "fullstack", "full stack", "full-stack", "qa", "tester", "sdet", "quality",
+    "devops", "sre", "cloud", "infrastructure", "product manager", "product owner",
+    "business analyst", "manager", "architect", "lead", "intern", "analyst",
+    "mobile", "android", "ios", "react", "node", "java", "python", "data",
+  ];
+
+  // Valid skills keywords
+  const validSkillKeywords = [
+    // Design
+    "figma", "adobe", "xd", "sketch", "photoshop", "illustrator", "invision",
+    "wireframe", "prototype", "ui", "ux", "design", "canva", "zeplin",
+    // Frontend
+    "react", "vue", "angular", "html", "css", "javascript", "typescript",
+    "nextjs", "next.js", "tailwind", "bootstrap", "sass", "scss", "jquery",
+    // Backend
+    "node", "nodejs", "express", "django", "flask", "spring", "laravel",
+    "php", "ruby", "rails", "fastapi", "graphql", "rest", "api",
+    // Languages
+    "python", "java", "kotlin", "swift", "c++", "c#", "golang", "go",
+    "rust", "scala", "dart", "flutter", "r",
+    // Database
+    "mongodb", "mysql", "postgresql", "postgres", "redis", "firebase",
+    "sqlite", "oracle", "dynamodb", "supabase",
+    // DevOps / Cloud
+    "docker", "kubernetes", "aws", "azure", "gcp", "jenkins", "github",
+    "gitlab", "ci/cd", "terraform", "ansible", "linux", "nginx",
+    // QA / Testing
+    "selenium", "cypress", "jest", "mocha", "postman", "jmeter",
+    "playwright", "testing", "automation", "manual",
+    // Product
+    "jira", "confluence", "agile", "scrum", "kanban", "roadmap",
+    "analytics", "excel", "powerpoint", "notion", "trello",
+    // Mobile
+    "android", "ios", "react native", "flutter", "xamarin",
+  ];
+
+  const validateForm = (): boolean => {
+    const errors: { role?: string; skills?: string; experience?: string } = {};
+
+    // Role validation
+    const roleLower = formData.role.toLowerCase().trim();
+    const isValidRole = validRoleKeywords.some((kw) => roleLower.includes(kw));
+    if (!isValidRole || formData.role.trim().length < 3) {
+      errors.role = "Please enter a valid job role (e.g. UI/UX Designer, React Developer, QA Engineer)";
+    }
+
+    // Skills validation — must match at least one known skill keyword
+    const skillsLower = formData.skills.toLowerCase();
+    const hasValidSkill = validSkillKeywords.some((kw) => skillsLower.includes(kw));
+    if (!hasValidSkill) {
+      errors.skills = "Please enter valid skills (e.g. Figma, React, Python, Docker, Selenium)";
+    }
+
+    // Experience validation
+    if (!formData.experience) {
+      errors.experience = "Please select your experience level";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resumeFile) {
       setResumeError("Please upload your resume.");
       return;
     }
+    if (!validateForm()) return;
     setStatus("loading");
     setMessage("");
 
@@ -91,6 +164,7 @@ export default function Home() {
       if (res.ok) {
         setStatus("success");
         setMessage(`Task generated and emailed to ${formData.email}! Check your inbox.`);
+        setTaskResult({ category: data.category, seniority: data.seniority, task_title: data.task_title });
         setFormData({ name: "", email: "", role: "", experience: "", skills: "" });
         setResumeFile(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -143,7 +217,7 @@ export default function Home() {
   const steps = [
     { num: "01", title: "Fill the Form", desc: "Enter your name, email, role, experience, and key skills." },
     { num: "02", title: "Upload Resume", desc: "Attach your resume in PDF or Word format (max 5MB)." },
-    { num: "03", title: "Get Your Task", desc: "Receive a custom coding task in your inbox instantly." },
+    { num: "03", title: "Get Your Task", desc: "Receive a custom assessment task in your inbox instantly." },
   ];
 
   return (
@@ -189,7 +263,7 @@ export default function Home() {
           {/* CTA */}
           <div className="hidden md:flex items-center gap-3">
             <a
-              href="/admin"
+              href="/admin/dashboard"
               className="text-slate-500 hover:text-slate-300 text-sm transition-colors border border-slate-800 hover:border-slate-700 px-4 py-2 rounded-lg"
             >
               Admin
@@ -250,7 +324,7 @@ export default function Home() {
           </h1>
 
           <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-            Submit your application and receive an AI-generated coding task tailored to your skills and experience — straight to your inbox.
+            Submit your application and receive an AI-generated assessment task tailored to your role and experience — straight to your inbox.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -317,7 +391,7 @@ export default function Home() {
           <div className="text-center mb-14">
             <p className="text-cyan-400 text-sm font-semibold tracking-widest uppercase mb-3">Simple Process</p>
             <h2 className="text-3xl md:text-4xl font-bold text-white">How it works</h2>
-            <p className="text-slate-400 mt-4 max-w-xl mx-auto">Three simple steps to receive your personalized coding challenge.</p>
+            <p className="text-slate-400 mt-4 max-w-xl mx-auto">Three simple steps to receive your personalized assessment task.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -344,7 +418,7 @@ export default function Home() {
           <div className="text-center mb-10">
             <p className="text-cyan-400 text-sm font-semibold tracking-widest uppercase mb-3">Get Started</p>
             <h2 className="text-3xl md:text-4xl font-bold text-white">Apply Now</h2>
-            <p className="text-slate-400 mt-4">Fill in your details and get a custom coding task in your inbox.</p>
+            <p className="text-slate-400 mt-4">Fill in your details and get a custom role-specific task in your inbox.</p>
           </div>
 
           {/* Form Card */}
@@ -359,7 +433,7 @@ export default function Home() {
                 </div>
                 <div>
                   <h3 className="text-white font-bold text-base">Job Application</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">Sensussoft — We&apos;re hiring talented developers</p>
+                  <p className="text-slate-400 text-xs mt-0.5">Sensussoft — We&apos;re hiring talented professionals</p>
                 </div>
               </div>
             </div>
@@ -382,13 +456,16 @@ export default function Home() {
                 {/* Role */}
                 <div>
                   <label className="block text-xs font-semibold text-cyan-400/70 uppercase tracking-widest mb-1.5">Role Applying For</label>
-                  <input type="text" name="role" value={formData.role} onChange={handleChange} required placeholder="e.g. Junior React Developer" className={inputClass} />
+                  <input type="text" name="role" value={formData.role} onChange={handleChange} required placeholder="e.g. Junior React Developer" className={`${inputClass} ${formErrors.role ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`} />
+                  {formErrors.role && (
+                    <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1"><span>⚠</span> {formErrors.role}</p>
+                  )}
                 </div>
 
                 {/* Experience */}
                 <div>
                   <label className="block text-xs font-semibold text-cyan-400/70 uppercase tracking-widest mb-1.5">Years of Experience</label>
-                  <select name="experience" value={formData.experience} onChange={handleChange} required className={inputClass}>
+                  <select name="experience" value={formData.experience} onChange={handleChange} required className={`${inputClass} ${formErrors.experience ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`}>
                     <option value="" className="bg-slate-800">Select experience level</option>
                     <option value="0-1 years" className="bg-slate-800">0–1 years (Fresher)</option>
                     <option value="1-2 years" className="bg-slate-800">1–2 years (Junior)</option>
@@ -396,12 +473,18 @@ export default function Home() {
                     <option value="5-7 years" className="bg-slate-800">5–7 years (Senior)</option>
                     <option value="7+ years" className="bg-slate-800">7+ years (Lead / Architect)</option>
                   </select>
+                  {formErrors.experience && (
+                    <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1"><span>⚠</span> {formErrors.experience}</p>
+                  )}
                 </div>
 
                 {/* Skills */}
                 <div>
                   <label className="block text-xs font-semibold text-cyan-400/70 uppercase tracking-widest mb-1.5">Skills</label>
-                  <textarea name="skills" value={formData.skills} onChange={handleChange} required rows={2} placeholder="e.g. React, Node.js, TypeScript, MongoDB" className={`${inputClass} resize-none`} />
+                  <textarea name="skills" value={formData.skills} onChange={handleChange} required rows={2} placeholder="e.g. React, Node.js, TypeScript, MongoDB" className={`${inputClass} resize-none ${formErrors.skills ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`} />
+                  {formErrors.skills && (
+                    <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1"><span>⚠</span> {formErrors.skills}</p>
+                  )}
                 </div>
 
                 {/* Resume Upload */}
@@ -477,7 +560,43 @@ export default function Home() {
                     : "bg-red-500/10 text-red-400 border border-red-500/20"
                 }`}>
                   <span className="text-base mt-0.5">{status === "success" ? "✅" : "❌"}</span>
-                  <span>{message}</span>
+                  <div className="flex-1">
+                    <span>{message}</span>
+                    {status === "success" && taskResult && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {/* Category badge */}
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${
+                          taskResult.category === "design"
+                            ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
+                            : taskResult.category === "qa"
+                            ? "bg-orange-500/20 border-orange-500/40 text-orange-300"
+                            : taskResult.category === "devops"
+                            ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                            : taskResult.category === "product"
+                            ? "bg-pink-500/20 border-pink-500/40 text-pink-300"
+                            : "bg-cyan-500/20 border-cyan-500/40 text-cyan-300"
+                        }`}>
+                          {taskResult.category === "design" ? "🎨" : taskResult.category === "qa" ? "🧪" : taskResult.category === "devops" ? "⚙️" : taskResult.category === "product" ? "📋" : "💻"}
+                          {taskResult.category.charAt(0).toUpperCase() + taskResult.category.slice(1)}
+                        </span>
+                        {/* Seniority badge */}
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${
+                          taskResult.seniority === "Senior"
+                            ? "bg-red-500/20 border-red-500/40 text-red-300"
+                            : taskResult.seniority === "Mid-level"
+                            ? "bg-yellow-500/20 border-yellow-500/40 text-yellow-300"
+                            : "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                        }`}>
+                          {taskResult.seniority === "Senior" ? "🏆" : taskResult.seniority === "Mid-level" ? "⭐" : "🌱"}
+                          {taskResult.seniority}
+                        </span>
+                        {/* Task title */}
+                        <span className="w-full text-xs text-emerald-300/70 mt-1">
+                          📝 {taskResult.task_title}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -514,7 +633,7 @@ export default function Home() {
 
           <div className="mt-8 pt-6 border-t border-slate-800/60 text-center">
             <p className="text-slate-600 text-xs">
-              Your data is used only to generate a personalised coding task. We respect your privacy.
+              Your data is used only to generate a personalised assessment task. We respect your privacy.
             </p>
           </div>
         </div>

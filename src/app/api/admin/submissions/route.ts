@@ -1,25 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { store } from "@/lib/store";
 
-function isAuthenticated(req: NextRequest): boolean {
-  const session = req.cookies.get("admin_session");
-  return session?.value === "authenticated";
-}
-
-export async function GET(req: NextRequest) {
-  if (!isAuthenticated(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export async function GET() {
   const submissions = await store.getAll();
   return NextResponse.json({ submissions });
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!isAuthenticated(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const { id, status } = await req.json();
     if (!id || !status) {
@@ -38,10 +25,6 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isAuthenticated(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const { id } = await req.json();
     if (!id) {

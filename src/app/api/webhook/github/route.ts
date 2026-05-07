@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
 async function sendProgressEmail(
   submission: Submission,
   progress: number,
-  commits: any[],
+  commits: { message?: string }[],
   repoUrl: string
 ): Promise<void> {
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
@@ -181,13 +181,12 @@ async function sendProgressEmail(
 }
 
 // Analyze task progress using AI (OpenRouter)
-async function analyzeTaskProgress(payload: any, taskTitle: string): Promise<number> {
-  // Extract file changes
+async function analyzeTaskProgress(payload: { commits?: { added?: string[]; modified?: string[] }[] }, taskTitle: string): Promise<number> {
   const commits = payload.commits || [];
   const addedFiles: string[] = [];
   const modifiedFiles: string[] = [];
 
-  commits.forEach((commit: any) => {
+  commits.forEach((commit) => {
     addedFiles.push(...(commit.added || []));
     modifiedFiles.push(...(commit.modified || []));
   });
@@ -224,7 +223,7 @@ Return ONLY a number between 0-100, nothing else.`;
         "X-Title": "Sensussoft Hiring Platform",
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3.3-70b-instruct",
+        model: "openrouter/free",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.3,
         max_tokens: 10,
