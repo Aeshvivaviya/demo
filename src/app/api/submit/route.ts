@@ -444,8 +444,6 @@ function renderEmail(data: ApplicationData, task: GeneratedTask, repoUrl: string
   const list = (arr: string[]) => arr.map((x) => `<li style="margin:6px 0">${x}</li>`).join("");
   const difficultyColor = task.difficulty === "Senior" ? "#c0392b" : task.difficulty === "Mid-level" ? "#e67e22" : "#27ae60";
   const repoDisplay = repoUrl.replace("https://", "");
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const progressUrl = `${appUrl}/progress?email=${encodeURIComponent(data.email)}`;
 
   return `
     <div style="font-family:Arial,sans-serif;max-width:640px;color:#333;margin:0 auto;">
@@ -472,13 +470,6 @@ function renderEmail(data: ApplicationData, task: GeneratedTask, repoUrl: string
             <p style="margin:0;font-size:13px;color:#555;">A dedicated GitHub repository has been created for you:</p>
             <a href="${repoUrl}" style="display:inline-block;margin-top:10px;padding:8px 16px;background:#1F4E79;color:white;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold;">
               📂 ${repoDisplay}
-            </a>
-          </div>
-          <div style="margin-top:14px;padding:14px 18px;background:#f0fff4;border-radius:8px;border:1px solid #b7ebc8;">
-            <h4 style="color:#1a7a3c;margin:0 0 8px 0;">📊 Track Your Progress</h4>
-            <p style="margin:0;font-size:13px;color:#555;">Monitor your task completion in real-time:</p>
-            <a href="${progressUrl}" style="display:inline-block;margin-top:10px;padding:8px 16px;background:#1a7a3c;color:white;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold;">
-              📈 View Progress
             </a>
           </div>
         </div>
