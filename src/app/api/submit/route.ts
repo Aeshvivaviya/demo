@@ -143,8 +143,7 @@ Return ONLY valid JSON with these exact keys (no markdown, no code fences):
 async function extractCvText(buffer: Buffer, mimeType: string): Promise<string> {
   try {
     if (mimeType === "application/pdf") {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require("pdf-parse");
+      const pdfParse = (await import("pdf-parse")).default;
       const result = await pdfParse(buffer);
       return result.text?.slice(0, 1500) || "";
     }
