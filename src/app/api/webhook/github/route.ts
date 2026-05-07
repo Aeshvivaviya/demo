@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
 import nodemailer from "nodemailer";
 import { store } from "@/lib/store";
 import type { Submission } from "@/lib/store";
@@ -181,22 +180,20 @@ async function sendProgressEmail(
   });
 }
 
-// Analyze task progress using AI
+// Analyze task progress using AI (OpenRouter)
 async function analyzeTaskProgress(payload: any, taskTitle: string): Promise<number> {
-  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
-  
   // Extract file changes
   const commits = payload.commits || [];
   const addedFiles: string[] = [];
   const modifiedFiles: string[] = [];
-  
+
   commits.forEach((commit: any) => {
     addedFiles.push(...(commit.added || []));
     modifiedFiles.push(...(commit.modified || []));
   });
 
   const allFiles = [...new Set([...addedFiles, ...modifiedFiles])];
-  
+
   if (allFiles.length === 0) {
     return 0;
   }
@@ -218,16 +215,28 @@ Consider:
 Return ONLY a number between 0-100, nothing else.`;
 
   try {
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
-      max_tokens: 10,
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "X-Title": "Sensussoft Hiring Platform",
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-3.3-70b-instruct",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+        max_tokens: 10,
+      }),
     });
 
-    const text = completion.choices[0]?.message?.content?.trim() || "0";
+    if (!res.ok) throw new Error(`OpenRouter error: ${res.status}`);
+
+    const json = await res.json();
+    const text = json.choices[0]?.message?.content?.trim() || "0";
     const progress = parseInt(text, 10);
-    
+
     return isNaN(progress) ? 0 : Math.min(100, Math.max(0, progress));
   } catch (err) {
     console.error("AI analysis failed:", err);

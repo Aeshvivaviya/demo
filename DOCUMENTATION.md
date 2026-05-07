@@ -1,879 +1,415 @@
-# 📘 Sensussoft AI Hiring System — Complete Documentation
+# Sensussoft Hiring Platform — Documentation
 
-> **Project Name:** Sensussoft Hiring System  
-> **Framework:** Next.js 16 (App Router)  
-> **Language:** TypeScript  
-> **Deployed On:** Vercel  
-> **Database:** Upstash Redis  
+## Project Overview
 
----
+Yeh ek **AI-powered job application platform** hai jo Sensussoft company ke liye banaya gaya hai. Jab koi candidate apply karta hai, system automatically:
 
-## 📌 1. Project Overview (Project Kya Hai?)
-
-Yeh ek **AI-powered automated hiring system** hai jo Sensussoft company ke liye banaya gaya hai.
-
-**Kaam kya karta hai:**
-- Candidate apna form bharta hai aur resume upload karta hai
-- System automatically AI se ek unique coding task generate karta hai
-- Candidate ke liye GitHub par ek naya repo create hota hai
-- Task ka PDF banta hai aur email mein bheja jaata hai
-- Jab candidate code push karta hai, progress automatically track hoti hai
-- Admin dashboard se saari submissions manage ki ja sakti hain
+1. Candidate ka resume aur profile analyze karta hai
+2. AI se ek custom coding task generate karta hai
+3. Candidate ke email pe task PDF ke saath bhejta hai
+4. GitHub pe candidate ke liye ek dedicated repo create karta hai
+5. Jab candidate code push karta hai, progress track karta hai aur update email bhejta hai
 
 ---
 
-## 🗂️ 2. Project Folder Structure
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router) |
+| Language | TypeScript |
+| Styling | Tailwind CSS v4 |
+| AI (Task Generation) | Groq SDK (LLaMA 3.3 70B) |
+| Database | Upstash Redis (serverless) |
+| Email | Nodemailer + Gmail SMTP |
+| PDF Generation | PDFKit |
+| Version Control Integration | GitHub REST API + Webhooks |
+| Deployment | Vercel |
+
+---
+
+## Project Structure
 
 ```
 task-manager/
-│
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx                    ← Main landing page (candidate form)
-│   │   ├── layout.tsx                  ← Root HTML layout
-│   │   ├── globals.css                 ← Global CSS styles
-│   │   │
+│   │   ├── page.tsx                        # Main landing page (candidate form)
+│   │   ├── layout.tsx                      # Root layout
+│   │   ├── globals.css                     # Global styles
 │   │   ├── admin/
-│   │   │   ├── page.tsx                ← Admin login page
+│   │   │   ├── page.tsx                    # Admin login page
 │   │   │   └── dashboard/
-│   │   │       └── page.tsx            ← Admin dashboard page
-│   │   │
+│   │   │       └── page.tsx                # Admin dashboard
 │   │   ├── progress/
-│   │   │   └── page.tsx                ← Candidate progress tracking page
-│   │   │
+│   │   │   └── page.tsx                    # Candidate progress tracker
 │   │   └── api/
 │   │       ├── submit/
-│   │       │   └── route.ts            ← Main form submission API
-│   │       │
+│   │       │   └── route.ts                # Main submission handler
 │   │       ├── progress/
-│   │       │   └── route.ts            ← Progress fetch API
-│   │       │
-│   │       ├── webhook/
-│   │       │   └── github/
-│   │       │       └── route.ts        ← GitHub webhook handler
-│   │       │
-│   │       └── admin/
-│   │           ├── login/
-│   │           │   └── route.ts        ← Admin login API
-│   │           ├── logout/
-│   │           │   └── route.ts        ← Admin logout API
-│   │           └── submissions/
-│   │               └── route.ts        ← Submissions CRUD API
-│   │
+│   │       │   └── route.ts                # Progress fetch API
+│   │       ├── admin/
+│   │       │   ├── login/route.ts          # Admin login API
+│   │       │   ├── logout/route.ts         # Admin logout API
+│   │       │   └── submissions/route.ts    # Submissions CRUD API
+│   │       └── webhook/
+│   │           └── github/route.ts         # GitHub push webhook handler
 │   └── lib/
-│       ├── store.ts                    ← Redis + in-memory data store
-│       └── adminAuth.ts                ← Admin credentials check
-│
-├── .env.local                          ← Secret environment variables
-├── package.json                        ← Project dependencies
-├── next.config.ts                      ← Next.js configuration
-├── vercel.json                         ← Vercel deployment config
-└── tsconfig.json                       ← TypeScript configuration
+│       ├── store.ts                        # Redis data store (with in-memory fallback)
+│       └── adminAuth.ts                    # Admin credential check
+├── .env.local                              # Environment variables (local)
+├── vercel.json                             # Vercel deployment config
+└── package.json
 ```
 
 ---
 
-## 🔄 3. Complete System Flow
+## Pages
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    CANDIDATE SIDE                        │
-└─────────────────────────────────────────────────────────┘
+### 1. Landing Page (`/`)
 
-Step 1: Candidate website par jaata hai
-        URL: https://yourapp.vercel.app
+Candidate-facing public page. Sections:
 
-Step 2: Form bharta hai
-        - Name, Email, Role, Experience, Skills, Resume
+- **Navbar** — Logo, navigation links, "Apply Now" CTA, Admin link
+- **Hero** — Headline, stats (500+ applicants, <30s delivery, 100% AI powered)
+- **Features** — 6 feature cards (AI Tasks, Instant Delivery, Role-Specific, Secure, Resume Analysis, Stand Out)
+- **How it Works** — 3-step process (Fill Form → Upload Resume → Get Task)
+- **Application Form** — Candidate submits:
+  - Full Name
+  - Email Address
+  - Role Applying For
+  - Years of Experience (dropdown: Fresher to Lead/Architect)
+  - Skills (textarea)
+  - Resume upload (PDF/DOC/DOCX, max 5MB, drag & drop supported)
+- **Footer**
 
-Step 3: "Submit Application" click karta hai
-        → POST /api/submit
-
-Step 4: System automatically karta hai:
-        a) Groq AI se unique coding task generate karta hai
-        b) GitHub par naya repo create karta hai
-           (e.g., john-doe-react-dev-1746123456-demo-task)
-        c) Repo mein TASK.md file add karta hai
-        d) Repo par webhook register karta hai
-        e) Task ka PDF generate karta hai
-        f) Candidate ko email bhejta hai (task + PDF + repo link)
-        g) Redis mein submission save karta hai
-
-Step 5: Candidate email check karta hai
-        → GitHub repo link milta hai
-        → PDF attachment milta hai
-
-Step 6: Candidate code likhta hai aur repo mein push karta hai
-
-Step 7: GitHub webhook trigger hota hai
-        → POST /api/webhook/github
-
-Step 8: System:
-        a) Groq AI se progress % calculate karta hai
-        b) Redis mein progress update karta hai
-        c) Candidate ko progress email bhejta hai
-           "Aapne 65% task complete kar liya! 🚀"
-
-┌─────────────────────────────────────────────────────────┐
-│                     ADMIN SIDE                           │
-└─────────────────────────────────────────────────────────┘
-
-Step 1: Admin /admin par jaata hai
-Step 2: Login karta hai (admin / sensussoft@123)
-Step 3: Dashboard par saari submissions dekhta hai
-Step 4: Filter/Search karta hai
-Step 5: Submission click karta hai → details dekhta hai
-Step 6: GitHub repo link par click karta hai → repo open hota hai
-Step 7: Status update karta hai: Pending → Reviewed / Rejected
-Step 8: Zarurat ho to submission delete karta hai
-```
+Form submit karne ke baad `/api/submit` call hota hai.
 
 ---
 
-## 📄 4. Pages (Frontend)
+### 2. Admin Login (`/admin`)
+
+Password-protected admin portal.
+
+- Username + Password form
+- Default credentials: `admin` / `sensussoft@123` (env vars se override ho sakta hai)
+- Login successful hone pe `admin_session` cookie set hoti hai (httpOnly, 8 hours)
+- Redirect to `/admin/dashboard`
 
 ---
 
-### 4.1 Landing Page — `src/app/page.tsx`
+### 3. Admin Dashboard (`/admin/dashboard`)
 
-**URL:** `/`
+Session-protected page. Features:
 
-**Kya dikhta hai:**
-- Sensussoft company ki hiring website
-- Hero section with "Apply Now" button
-- Features section (6 cards)
-- How it Works section (3 steps)
-- Application form
-- Footer
-
-**Application Form Fields:**
-
-| Field | Type | Validation |
-|-------|------|------------|
-| Full Name | Text input | Required |
-| Email Address | Email input | Required, valid email |
-| Role Applying For | Text input | Required |
-| Years of Experience | Dropdown | Required |
-| Skills | Textarea | Required |
-| Resume | File upload | Required, PDF/DOC/DOCX, max 5MB |
-
-**Experience Dropdown Options:**
-- 0–1 years (Fresher)
-- 1–2 years (Junior)
-- 3–5 years (Mid-level)
-- 5–7 years (Senior)
-- 7+ years (Lead / Architect)
-
-**Submit hone par:**
-- Loading state: "Generating Task..." with spinner
-- Success: Green message "Task generated and emailed to {email}!"
-- Error: Red message with error details
+- **Stats cards** — Total, Pending, Reviewed, Rejected counts
+- **Filter buttons** — All / Pending / Reviewed / Rejected
+- **Search bar** — Name, email, ya role se search
+- **Submissions table** — Applicant name, email, role, experience, status, date
+- **Detail panel** — Click karo kisi row pe:
+  - Full candidate details
+  - Task title jo generate hua
+  - GitHub repo link
+  - Status update buttons (Pending / Reviewed / Rejected)
+  - Delete button
 
 ---
 
-### 4.2 Admin Login Page — `src/app/admin/page.tsx`
+### 4. Progress Tracker (`/progress?email=...`)
 
-**URL:** `/admin`
+Candidate apna progress dekh sakta hai email se.
 
-**Kya dikhta hai:**
-- Login form (Username + Password)
-- Sensussoft branding
-
-**Default Credentials:**
-```
-Username: admin
-Password: sensussoft@123
-```
-
-**Login hone par:**
-- Cookie set hoti hai: `admin_session=authenticated`
-- `/admin/dashboard` par redirect hota hai
-
----
-
-### 4.3 Admin Dashboard — `src/app/admin/dashboard/page.tsx`
-
-**URL:** `/admin/dashboard`
-
-**Kya dikhta hai:**
-
-**Stats Cards (top):**
-| Card | Color | Kya dikhata hai |
-|------|-------|-----------------|
-| Total | Gray | Saari submissions count |
-| Pending | Yellow | Review baaki submissions |
-| Reviewed | Cyan | Review ho gayi submissions |
-| Rejected | Red | Reject hui submissions |
-
-**Filter Buttons:**
-- All / Pending / Reviewed / Rejected
-
-**Search Bar:**
-- Name, Email, ya Role se search
-
-**Submissions Table:**
-- Applicant (name + email)
-- Role
-- Experience
-- Status badge
-- Date
-- "View →" button
-
-**Detail Panel (right side, click karne par):**
-- Candidate name, email
-- Status badge
-- Role, Experience, Skills
-- Resume filename
-- AI generated task title
-- GitHub Repo link (clickable button → opens repo)
-- Status update buttons (Pending / Reviewed / Rejected)
-- Delete button
-
-**Authentication:**
-- Cookie check karta hai
-- Na ho to `/admin` par redirect
-
----
-
-### 4.4 Progress Page — `src/app/progress/page.tsx`
-
-**URL:** `/progress?email=candidate@gmail.com`
-
-**Kya dikhta hai:**
-- Candidate ka naam, role, task title
-- Animated progress bar
-- Completion percentage (large number)
-- Status message based on %
-- Last updated time
+- URL: `/progress?email=candidate@example.com`
+- Animated progress bar (color changes: blue → cyan → green)
+- Status messages based on percentage
 - Auto-refresh every 30 seconds
-- Manual "Refresh Progress" button
-
-**Progress Colors:**
-| Range | Color | Message |
-|-------|-------|---------|
-| 0% | Gray | "Not Started Yet" |
-| 1–49% | Blue | "In Progress... 🚀" |
-| 50–79% | Cyan | "Good Progress! 💪" |
-| 80–100% | Green | "Almost Done! 🎉" |
+- Manual refresh button
 
 ---
 
-## 🔌 5. APIs (Backend)
+## API Routes
 
----
+### `POST /api/submit`
 
-### 5.1 POST `/api/submit` — Main Submission API
+Main application submission endpoint.
 
-**File:** `src/app/api/submit/route.ts`
+**Request:** `multipart/form-data`
 
-**Request Type:** `multipart/form-data`
+| Field | Type | Required |
+|---|---|---|
+| name | string | ✅ |
+| email | string | ✅ |
+| role | string | ✅ |
+| experience | string | ✅ |
+| skills | string | ✅ |
+| resume | File (PDF/DOC/DOCX) | Optional |
 
-**Request Fields:**
-```
-name        → string (required)
-email       → string (required)
-role        → string (required)
-experience  → string (required)
-skills      → string (required)
-resume      → File (PDF/DOC/DOCX, max 5MB)
-```
+**Header:** `x-webhook-secret: <secret>` (agar `WEBHOOK_SECRET` env set hai)
 
-**Required Header:**
-```
-x-webhook-secret: demo-secret-do-not-change
-```
-
-**Step-by-step processing:**
-
-#### Step 1 — Groq AI se Task Generate
-```
-Models try karta hai (order mein):
-  1. llama-3.3-70b-versatile  (best)
-  2. llama-3.1-8b-instant     (fallback)
-  3. gemma2-9b-it              (last resort)
-
-AI ko bheja jaata hai:
-  - Candidate ka naam, role, experience, skills
-
-AI return karta hai (JSON):
-{
-  "title": "Build a Task Manager App",
-  "difficulty": "Junior",
-  "scenario": "2-3 sentence description...",
-  "requirements": ["req1", "req2", "req3", "req4"],
-  "deliverables": ["GitHub repo link", "README.md"],
-  "evaluation_criteria": ["c1", "c2", "c3", "c4"],
-  "deadline_days": 3
-}
-
-Difficulty rules:
-  0-2 years  → Junior    (~3 hours work)
-  3-5 years  → Mid-level (~6 hours work)
-  6+ years   → Senior    (~8 hours work)
-```
-
-#### Step 2 — GitHub Repo Create
-```
-Repo name format:
-  {name}-{role}-{timestamp}-demo-task
-
-Example:
-  john-doe-react-developer-1746123456789-demo-task
-
-GitHub API call:
-  POST https://api.github.com/user/repos
-  → Public repo create hota hai
-  → auto_init: true (README.md auto-create)
-```
-
-#### Step 3 — TASK.md Add
-```
-GitHub API call:
-  PUT https://api.github.com/repos/{user}/{repo}/contents/TASK.md
-
-TASK.md mein hota hai:
-  - Task title + difficulty + deadline
-  - Candidate details
-  - Scenario
-  - Requirements (numbered)
-  - Deliverables (bullets)
-  - Evaluation criteria (checkmarks)
-  - Submission instructions
-```
-
-#### Step 4 — Webhook Register
-```
-GitHub API call:
-  POST https://api.github.com/repos/{user}/{repo}/hooks
-
-Webhook config:
-  URL: {NEXT_PUBLIC_APP_URL}/api/webhook/github
-  Event: push
-  Content-type: json
-  Active: true
-```
-
-#### Step 5 — PDF Generate (PDFKit)
-```
-PDF mein hota hai:
-  - Blue header: "Sensussoft — Practical Task"
-  - Candidate details section
-  - Difficulty badge (colored: green/orange/red)
-  - Task title (large)
-  - Scenario text
-  - Requirements (numbered list)
-  - Deliverables (bullet list)
-  - Evaluation criteria (checkmarks)
-  - Deadline box (blue background)
-  - Footer text
-
-File name: Sensussoft_Task_{CandidateName}.pdf
-```
-
-#### Step 6 — Email Send (Nodemailer + Gmail)
-```
-From: "Sensussoft Careers" <gmail_user>
-To: candidate email
-Subject: Sensussoft — Practical Task for {role}
-
-Attachments:
-  1. Sensussoft_Task_{Name}.pdf  (generated task)
-  2. Candidate's resume          (if uploaded)
-
-Email HTML body mein:
-  - Greeting with candidate name
-  - Task title + difficulty badge
-  - Scenario
-  - Requirements list
-  - Deliverables list
-  - Evaluation criteria
-  - GitHub repo button (unique link)
-```
-
-#### Step 7 — Redis mein Save
-```
-Saved data:
-{
-  id: "uuid",
-  name, email, role, experience, skills,
-  resumeFilename,
-  taskTitle: "AI generated title",
-  submittedAt: "ISO timestamp",
-  status: "pending",
-  githubRepo: "https://github.com/user/repo-name"
-}
-```
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "message": "Task generated and emailed successfully",
-  "task_title": "Build a Task Manager App"
-}
-```
-
-**Error Responses:**
-```json
-{ "error": "All fields are required" }           // 400
-{ "error": "Server configuration missing" }      // 500
-{ "error": "Unauthorized" }                      // 401
-```
-
----
-
-### 5.2 POST `/api/webhook/github` — GitHub Webhook Handler
-
-**File:** `src/app/api/webhook/github/route.ts`
-
-**Trigger:** Jab candidate GitHub repo mein code push karta hai
-
-**Required Header:**
-```
-x-github-event: push
-```
-
-**Processing Steps:**
-
-#### Step 1 — Event Check
-```
-x-github-event === "push" hona chahiye
-Baaki events (create, delete, etc.) ignore hote hain
-```
-
-#### Step 2 — Submission Match
-```
-Priority order:
-  1. githubRepo URL match (exact)
-  2. Pusher email match
-  3. Fallback: most recent submission
-
-Payload se extract karta hai:
-  - repository.html_url  → repo URL
-  - pusher.email         → pusher email
-  - commits[]            → commit list
-```
-
-#### Step 3 — AI Progress Analysis
-```
-Groq AI ko bheja jaata hai:
-  - Task title
-  - Added files list
-  - Modified files list
-
-AI return karta hai: 0-100 (sirf number)
-
-Fallback (agar AI fail ho):
-  progress = min(100, files.length × 10)
-```
-
-#### Step 4 — Redis Update
-```
-store.updateProgress(email, progress%)
-lastUpdated = current timestamp
-```
-
-#### Step 5 — Progress Email Send
-```
-Subject: Sensussoft — Progress Update: 65% Complete 🚀
-
-Email mein hota hai:
-  - Candidate ka naam
-  - Task title
-  - Visual progress bar (colored)
-  - Large % number
-  - Status message:
-      0-49%  → "Good start! Keep committing..."
-      50-79% → "Great progress! Halfway there..."
-      80-100% → "Amazing! Almost done..."
-  - Recent commits list (max 5)
-  - "View Repository" button
-```
+**Process (in order):**
+1. Form data parse karo
+2. Groq AI se task generate karo (JSON format mein)
+3. GitHub pe candidate ke liye unique repo banao
+4. Repo mein `TASK.md` file add karo
+5. GitHub webhook register karo (push events ke liye)
+6. PDF generate karo (PDFKit)
+7. Email bhejo candidate ko (task PDF + resume attachment)
+8. Submission Redis mein save karo
 
 **Response:**
 ```json
 {
   "success": true,
-  "email": "candidate@gmail.com",
-  "progress": 65
+  "message": "Task generated and emailed successfully",
+  "task_title": "Build a REST API with Authentication"
 }
 ```
 
 ---
 
-### 5.3 GET `/api/progress` — Progress Fetch API
+### `GET /api/progress?email=...`
 
-**File:** `src/app/api/progress/route.ts`
+Candidate ka progress fetch karo.
 
-**Request:**
-```
-GET /api/progress?email=candidate@gmail.com
-```
-
-**Response (Success):**
+**Response:**
 ```json
 {
   "name": "John Doe",
-  "email": "john@gmail.com",
+  "email": "john@example.com",
   "role": "React Developer",
-  "taskTitle": "Build a Task Manager App",
+  "taskTitle": "Build a Todo App with React",
   "progress": 65,
-  "lastUpdated": "2026-05-06T09:30:00.000Z",
-  "submittedAt": "2026-05-05T10:00:00.000Z"
+  "lastUpdated": "2026-05-07T10:30:00Z",
+  "submittedAt": "2026-05-05T08:00:00Z"
 }
-```
-
-**Response (Error):**
-```json
-{ "error": "Email is required" }        // 400
-{ "error": "Submission not found" }     // 404
 ```
 
 ---
 
-### 5.4 POST `/api/admin/login` — Admin Login
+### `POST /api/admin/login`
 
-**File:** `src/app/api/admin/login/route.ts`
+Admin login.
 
 **Request:**
 ```json
-{
-  "username": "admin",
-  "password": "sensussoft@123"
-}
+{ "username": "admin", "password": "sensussoft@123" }
 ```
 
-**Success Response:**
-```json
-{ "success": true }
-```
-+ Cookie set: `admin_session=authenticated`
-- HttpOnly: true (JS se access nahi)
-- Secure: true (production mein HTTPS only)
-- SameSite: strict
-- MaxAge: 8 hours (28800 seconds)
+**Response:** Sets `admin_session` cookie on success.
 
-**Error Response:**
+---
+
+### `POST /api/admin/logout`
+
+Admin logout — clears session cookie.
+
+---
+
+### `GET /api/admin/submissions`
+
+Saari submissions fetch karo. Session required.
+
+### `PATCH /api/admin/submissions`
+
+Status update karo.
+
 ```json
-{ "error": "Invalid credentials" }   // 401
+{ "id": "uuid", "status": "reviewed" }
+```
+
+### `DELETE /api/admin/submissions`
+
+Submission delete karo.
+
+```json
+{ "id": "uuid" }
 ```
 
 ---
 
-### 5.5 GET/PATCH/DELETE `/api/admin/submissions`
+### `POST /api/webhook/github`
 
-**File:** `src/app/api/admin/submissions/route.ts`
+GitHub push event webhook handler.
 
-**Authentication:** Cookie `admin_session=authenticated` required (sab methods mein)
-
-**GET — Saari submissions fetch karo:**
-```
-GET /api/admin/submissions
-
-Response:
-{
-  "submissions": [
-    { id, name, email, role, experience, skills,
-      resumeFilename, taskTitle, githubRepo,
-      submittedAt, status }
-  ]
-}
-```
-
-**PATCH — Status update karo:**
-```
-PATCH /api/admin/submissions
-Body: { "id": "uuid", "status": "reviewed" }
-
-Status values: "pending" | "reviewed" | "rejected"
-```
-
-**DELETE — Submission delete karo:**
-```
-DELETE /api/admin/submissions
-Body: { "id": "uuid" }
-```
+**Flow:**
+1. `x-github-event: push` header check karo
+2. Pusher email ya repo URL se submission dhundo
+3. Groq AI se pushed files analyze karke progress % calculate karo
+4. Redis mein progress update karo
+5. Candidate ko progress update email bhejo
 
 ---
 
-## 🗄️ 6. Data Store — `src/lib/store.ts`
+## Data Model
 
-**Primary Storage:** Upstash Redis (Vercel KV)  
-**Fallback Storage:** In-memory (development / Redis na ho tab)
+### `Submission` (Redis mein store hota hai)
 
-**Submission Data Model:**
 ```typescript
 interface Submission {
-  id: string           // UUID — auto-generated
-  name: string         // Candidate full name
-  email: string        // Candidate email
-  role: string         // Role applying for
-  experience: string   // Experience level
-  skills: string       // Skills list
-  resumeFilename?: string   // Uploaded resume filename
-  taskTitle?: string        // AI generated task title
-  submittedAt: string       // ISO timestamp
-  status: "pending" | "reviewed" | "rejected"
-  githubRepo?: string       // Unique GitHub repo URL
-  taskProgress?: number     // 0-100 (webhook se update)
-  lastUpdated?: string      // Last webhook update time
+  id: string;              // UUID
+  name: string;
+  email: string;
+  role: string;
+  experience: string;
+  skills: string;
+  resumeFilename?: string;
+  taskTitle?: string;      // AI-generated task ka title
+  submittedAt: string;     // ISO timestamp
+  status: "pending" | "reviewed" | "rejected";
+  githubRepo?: string;     // Created repo URL
+  taskProgress?: number;   // 0-100
+  lastUpdated?: string;    // Last GitHub push timestamp
 }
 ```
 
-**Store Methods:**
+---
 
-| Method | Parameters | Return | Kya karta hai |
-|--------|-----------|--------|---------------|
-| `store.getAll()` | — | `Submission[]` | Saari submissions return karta hai |
-| `store.add(data)` | submission object | `Submission` | Nayi submission add karta hai |
-| `store.updateStatus(id, status)` | id, status | `boolean` | Status change karta hai |
-| `store.updateProgress(email, %)` | email, number | `boolean` | Progress % update karta hai |
-| `store.delete(id)` | id | `boolean` | Submission delete karta hai |
+## AI Task Generation
 
-**Redis Key:** `"submissions"` (single JSON array)
+Groq API use hoti hai (LLaMA models). System teen models try karta hai fallback ke saath:
+
+1. `llama-3.3-70b-versatile` (primary)
+2. `llama-3.1-8b-instant` (fallback)
+3. `gemma2-9b-it` (last resort)
+
+Task difficulty experience ke hisaab se:
+
+| Experience | Difficulty | Estimated Time |
+|---|---|---|
+| 0–2 years | Junior | ~3 hours |
+| 3–5 years | Mid-level | ~6 hours |
+| 6+ years | Senior | ~8 hours |
+
+Generated task mein hota hai:
+- Title
+- Scenario (2-3 sentences)
+- Requirements (4 items)
+- Deliverables
+- Evaluation Criteria (4 items)
+- Deadline (days)
 
 ---
 
-## 🔐 7. Admin Authentication — `src/lib/adminAuth.ts`
+## GitHub Integration
 
-```typescript
-// Default credentials (env vars se override ho sakti hain)
-ADMIN_USERNAME = process.env.ADMIN_USERNAME ?? "admin"
-ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "sensussoft@123"
+Har candidate ke liye ek unique public repo create hota hai:
 
-// Check function
-checkCredentials(username, password) → boolean
+**Repo name format:** `{firstname-lastname}-{role}-{timestamp}-demo-task`
+
+Repo mein:
+- Default `README.md` (auto-init)
+- `TASK.md` — full task details with candidate info
+
+Webhook bhi register hota hai jo har push pe `/api/webhook/github` call karta hai.
+
+---
+
+## Email System
+
+Nodemailer + Gmail SMTP use hota hai.
+
+**Candidate ko milta hai:**
+- HTML email with task details, requirements, deliverables, evaluation criteria
+- GitHub repo link (button)
+- PDF attachment (task document)
+- Resume attachment (agar upload kiya ho)
+
+**Progress update email** (har GitHub push pe):
+- Progress bar (HTML)
+- Recent commits list
+- Motivational message based on % completion
+- Repo link button
+
+---
+
+## Data Storage
+
+**Primary:** Upstash Redis (serverless, Vercel ke saath compatible)
+
+**Fallback:** In-memory store (`globalThis.submissions`) — development ya Redis unavailable hone pe use hota hai. Note: Vercel deployments mein in-memory data persist nahi hota.
+
+**Environment variables for Redis:**
+- `KV_REST_API_URL` ya `UPSTASH_REDIS_REST_URL`
+- `KV_REST_API_TOKEN` ya `UPSTASH_REDIS_REST_TOKEN`
+
+---
+
+## Environment Variables
+
+`.env.local` mein yeh set karo:
+
+```env
+# AI
+GROQ_API_KEY=your_groq_api_key
+
+# Email
+GMAIL_USER=your@gmail.com
+GMAIL_APP_PASSWORD=your_gmail_app_password
+
+# GitHub
+GITHUB_TOKEN=your_github_personal_access_token
+GITHUB_USER=your_github_username
+GITHUB_REPO_URL=https://github.com/fallback/repo   # fallback if token not set
+
+# App URL (for webhook registration)
+NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
+
+# Admin Auth
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=sensussoft@123
+
+# Redis (Upstash)
+KV_REST_API_URL=https://...
+KV_REST_API_TOKEN=...
+
+# Optional: webhook security
+WEBHOOK_SECRET=your_secret
 ```
 
 ---
 
-## 📦 8. Dependencies (Packages)
-
-### Production Dependencies
-
-| Package | Version | Kaam |
-|---------|---------|------|
-| `next` | 16.2.4 | React framework + API routes |
-| `react` | 19.2.4 | UI library |
-| `react-dom` | 19.2.4 | React DOM rendering |
-| `groq-sdk` | ^1.1.2 | Groq AI API (LLaMA models) |
-| `nodemailer` | ^8.0.7 | Email send karna (Gmail) |
-| `pdfkit` | ^0.18.0 | PDF generate karna |
-| `@upstash/redis` | ^1.37.0 | Redis database client |
-| `@google/generative-ai` | ^0.24.1 | Google Gemini AI (installed) |
-
-### Dev Dependencies
-
-| Package | Version | Kaam |
-|---------|---------|------|
-| `typescript` | 5.9.3 | Type checking |
-| `tailwindcss` | ^4 | CSS utility classes |
-| `eslint` | ^9 | Code linting |
-| `@types/node` | 20.19.39 | Node.js types |
-| `@types/nodemailer` | ^8.0.0 | Nodemailer types |
-| `@types/pdfkit` | ^0.17.6 | PDFKit types |
-
----
-
-## 🌍 9. Environment Variables
-
-**File:** `.env.local` (gitignore mein hai — commit nahi hoti)
-
-| Variable | Required | Kya hai | Example |
-|----------|----------|---------|---------|
-| `GROQ_API_KEY` | ✅ | Groq AI API key | `gsk_xxx...` |
-| `GMAIL_USER` | ✅ | Gmail sender address | `you@gmail.com` |
-| `GMAIL_APP_PASSWORD` | ✅ | Gmail App Password (16 chars) | `abcd efgh ijkl mnop` |
-| `GITHUB_TOKEN` | ✅ | GitHub Personal Access Token | `ghp_xxx...` |
-| `GITHUB_USER` | ✅ | GitHub username | `Aeshvivaviya` |
-| `NEXT_PUBLIC_APP_URL` | ✅ | Deployed app URL | `https://yourapp.vercel.app` |
-| `GITHUB_REPO_URL` | ⚠️ | Fallback repo URL | `https://github.com/user/demo` |
-| `KV_REST_API_URL` | ⚠️ | Upstash Redis URL | `https://xxx.upstash.io` |
-| `KV_REST_API_TOKEN` | ⚠️ | Upstash Redis Token | `AXxx...` |
-| `ADMIN_USERNAME` | ⚠️ | Admin username (default: admin) | `admin` |
-| `ADMIN_PASSWORD` | ⚠️ | Admin password | `sensussoft@123` |
-| `WEBHOOK_SECRET` | ⚠️ | Form submission secret | `demo-secret-do-not-change` |
-
-✅ = Zaruri | ⚠️ = Optional (default value hai)
-
----
-
-## 🚀 10. Local Development Setup
+## Local Development
 
 ```bash
-# Step 1: Project folder mein jao
 cd task-manager
-
-# Step 2: Dependencies install karo
 npm install
-
-# Step 3: .env.local file banao aur variables set karo
-# (upar table dekho)
-
-# Step 4: Development server start karo
 npm run dev
-
-# App open hoga: http://localhost:3000
 ```
 
-**Available Scripts:**
-```bash
-npm run dev    # Development server (port 3000)
-npm run build  # Production build
-npm run start  # Production server
-npm run lint   # ESLint check
-```
+App `http://localhost:3000` pe chalega.
+
+> Note: `npm run dev` pehle port 3000 kill karta hai (`kill-port`), phir Next.js start karta hai.
 
 ---
 
-## 🌐 11. Vercel Deployment
+## Deployment (Vercel)
 
-```
-1. GitHub par code push karo
-2. vercel.com par jao → New Project
-3. GitHub repo import karo
-4. Environment Variables add karo (Settings → Environment Variables)
-   → Saare variables .env.local se copy karo
-5. Deploy karo
+`vercel.json` already configured hai:
 
-Important: NEXT_PUBLIC_APP_URL mein apna Vercel URL daalo
-           (e.g., https://demo-ten-nu-59.vercel.app)
-           Iske bina GitHub webhook register nahi hoga!
+```json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "framework": "nextjs"
+}
 ```
+
+Vercel dashboard mein saare environment variables add karo.
 
 ---
 
-## 📧 12. Gmail Setup (Email ke liye)
+## Security Notes
 
-```
-1. Google Account → Security → 2-Step Verification ON karo
-2. Security → App Passwords par jao
-3. App: "Mail", Device: "Other" select karo
-4. 16-character password generate hoga
-5. Woh password GMAIL_APP_PASSWORD mein daalo
-   (spaces ke saath ya bina — dono kaam karte hain)
-```
+- Admin session cookie: `httpOnly`, `secure` (production mein), `sameSite: strict`, 8 hours expiry
+- Webhook secret header optional but recommended (`WEBHOOK_SECRET`)
+- Admin credentials env vars se override ho sakte hain (default hardcoded values production mein change karo)
+- Resume files server pe store nahi hote — sirf email attachment ke liye buffer mein rakhe jaate hain
 
 ---
 
-## 🐙 13. GitHub Token Setup
+## Known Limitations
 
-```
-1. GitHub → Settings (top right avatar)
-2. Developer Settings → Personal Access Tokens → Tokens (classic)
-3. "Generate new token (classic)" click karo
-4. Scopes select karo:
-   ✅ repo          (full repository access)
-   ✅ admin:repo_hook (webhook manage karna)
-5. Generate karo → Token copy karo
-6. GITHUB_TOKEN mein daalo
-
-Note: Token sirf ek baar dikhta hai — save kar lo!
-```
-
----
-
-## 🗃️ 14. Upstash Redis Setup (Database ke liye)
-
-```
-1. upstash.com par account banao
-2. New Database create karo
-3. Region: us-east-1 (ya nearest)
-4. Database open karo → REST API section
-5. Copy karo:
-   - UPSTASH_REDIS_REST_URL → KV_REST_API_URL mein daalo
-   - UPSTASH_REDIS_REST_TOKEN → KV_REST_API_TOKEN mein daalo
-
-Note: Redis na ho to in-memory fallback use hota hai
-      (server restart hone par data delete ho jaata hai)
-```
-
----
-
-## 🔁 15. Complete User Journey (Step by Step)
-
-```
-👤 CANDIDATE JOURNEY:
-
-1. Website visit karta hai
-   → https://yourapp.vercel.app
-
-2. Form bharta hai
-   → Name: John Doe
-   → Email: john@gmail.com
-   → Role: React Developer
-   → Experience: 1-2 years (Junior)
-   → Skills: React, JavaScript, CSS
-   → Resume: resume.pdf (upload)
-
-3. "Submit Application →" click karta hai
-   → Loading: "Generating Task..."
-
-4. System 10-15 seconds mein:
-   → AI task generate karta hai
-   → GitHub repo banata hai:
-      "john-doe-react-developer-1746123456-demo-task"
-   → TASK.md add karta hai
-   → Webhook register karta hai
-   → PDF banata hai
-   → Email bhejta hai
-
-5. Candidate email check karta hai
-   → Subject: "Sensussoft — Practical Task for React Developer"
-   → GitHub repo link milta hai
-   → PDF attachment milta hai
-
-6. Candidate GitHub repo open karta hai
-   → TASK.md padhta hai
-   → Code likhna shuru karta hai
-
-7. Candidate code push karta hai
-   → git add . && git commit -m "feat: add login" && git push
-
-8. Webhook trigger hota hai
-   → AI progress calculate karta hai: 45%
-   → Email aata hai: "Aapne 45% task complete kar liya! 🚀"
-
-9. Candidate aur code push karta hai
-   → Progress update hoti hai: 80%
-   → Email aata hai: "Amazing! Almost done! 🎉"
-
-👨‍💼 ADMIN JOURNEY:
-
-1. /admin par jaata hai
-2. Login karta hai: admin / sensussoft@123
-3. Dashboard dekhta hai:
-   → Total: 5, Pending: 3, Reviewed: 1, Rejected: 1
-4. "John Doe" par click karta hai
-5. Detail panel mein dekhta hai:
-   → Role: React Developer
-   → Task: "Build a Todo App with React"
-   → GitHub: john-doe-react-developer-... (clickable)
-6. GitHub link click karta hai → repo open hota hai
-7. Code review karta hai
-8. Status "Reviewed" karta hai
-```
-
----
-
-## ⚠️ 16. Important Notes
-
-1. **`.env.local` kabhi GitHub par push mat karo** — gitignore mein hai, safe hai
-
-2. **NEXT_PUBLIC_APP_URL** Vercel par zarur set karo — iske bina webhook kaam nahi karega
-
-3. **Gmail App Password** regular password nahi hai — 2FA enable karke App Password generate karo
-
-4. **GitHub Token** mein `repo` aur `admin:repo_hook` scopes zaruri hain
-
-5. **Redis na ho** to in-memory fallback use hota hai — development ke liye theek hai, production mein Redis lagao
-
-6. **Groq AI** 3 models try karta hai — ek fail ho to doosra use karta hai
-
-7. **Progress tracking** sirf tab kaam karta hai jab `NEXT_PUBLIC_APP_URL` set ho aur webhook register hua ho
-
----
-
-*Documentation Version: 1.0*  
-*Last Updated: May 2026*  
-*Project: Sensussoft AI Hiring System*
+- In-memory fallback store Vercel pe persist nahi karta (Redis required for production)
+- `roleMiddleware.js` file project mein hai lekin currently Next.js routes mein use nahi ho rahi (legacy file)
+- `.env` file mein purane React app variables hain (`REACT_APP_*`) jo is project mein use nahi hote

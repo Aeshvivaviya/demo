@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
 import nodemailer from "nodemailer";
 import PDFDocument from "pdfkit";
 import { store } from "@/lib/store";
@@ -186,10 +185,8 @@ Push your code to this repository and notify the Sensussoft hiring team.
 `;
 }
 
-// ── Groq: Generate custom task as JSON ────────────────────────────────────
+// ── OpenRouter: Generate custom task as JSON ──────────────────────────────
 async function generateTask(data: ApplicationData): Promise<GeneratedTask> {
-  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
-
   // Parse experience years from string like "1-2 years", "7+ years"
   const expStr = data.experience.toLowerCase();
   let expYears = 0;
@@ -229,18 +226,38 @@ Return ONLY valid JSON with these exact keys:
 
 No markdown, no code fences, just raw JSON.`;
 
-  const modelsToTry = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"];
+  // Models to try in order (fallback chain)
+  const modelsToTry = [
+    "meta-llama/llama-3.3-70b-instruct",
+    "meta-llama/llama-3.1-8b-instruct",
+    "google/gemma-2-9b-it",
+  ];
 
   for (const modelName of modelsToTry) {
     try {
-      const completion = await groq.chat.completions.create({
-        model: modelName,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.7,
-        max_tokens: 1024,
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+          "X-Title": "Sensussoft Hiring Platform",
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.7,
+          max_tokens: 1024,
+        }),
       });
 
-      let text = completion.choices[0]?.message?.content || "";
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`OpenRouter error ${res.status}: ${errText}`);
+      }
+
+      const json = await res.json();
+      let text = json.choices[0]?.message?.content || "";
       // Strip markdown code fences if model wraps JSON
       text = text.replace(/```json|```/g, "").trim();
 
@@ -253,7 +270,7 @@ No markdown, no code fences, just raw JSON.`;
     }
   }
 
-  throw new Error("All AI models failed. Please check your GROQ_API_KEY.");
+  throw new Error("All AI models failed. Please check your OPENROUTER_API_KEY.");
 }
 
 // ── PDFKit: Generate PDF buffer ────────────────────────────────────────────
@@ -491,7 +508,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
 
-    if (!process.env.GROQ_API_KEY || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    if (!process.env.OPENROUTER_API_KEY || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
       return NextResponse.json(
         { error: "Server configuration missing. Check environment variables." },
         { status: 500 }
