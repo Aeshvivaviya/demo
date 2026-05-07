@@ -360,6 +360,21 @@ async function generateTask(data: ApplicationData): Promise<GeneratedTask> {
       if (!jsonMatch) throw new Error("No JSON object found in response");
 
       const parsed: GeneratedTask = JSON.parse(jsonMatch[0]);
+
+      // Sanitize — ensure all array fields are actually arrays
+      const toArray = (val: unknown): string[] => {
+        if (Array.isArray(val)) return val.map(String);
+        if (typeof val === "string") return val.split("\n").filter(Boolean);
+        return [];
+      };
+      parsed.requirements = toArray(parsed.requirements);
+      parsed.deliverables = toArray(parsed.deliverables);
+      parsed.evaluation_criteria = toArray(parsed.evaluation_criteria);
+      parsed.title = parsed.title || "Assessment Task";
+      parsed.scenario = parsed.scenario || "";
+      parsed.difficulty = parsed.difficulty || "Junior";
+      parsed.deadline_days = parsed.deadline_days || 3;
+
       console.log(`✅ Task generated with model: ${modelName} — "${parsed.title}"`);
       return parsed;
     } catch (err: unknown) {
