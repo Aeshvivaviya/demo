@@ -143,10 +143,24 @@ Return ONLY valid JSON with these exact keys (no markdown, no code fences):
 async function extractCvText(buffer: Buffer, mimeType: string): Promise<string> {
   try {
     if (mimeType === "application/pdf") {
-      const pdfParseModule = await import("pdf-parse");
-      const pdfParse = (pdfParseModule.default ?? pdfParseModule) as (buf: Buffer) => Promise<{ text: string }>;
-      const result = await pdfParse(buffer);
-      return result.text?.slice(0, 1500) || "";
+      // Use a simple text extraction approach for Vercel compatibility
+      // pdf-parse has ESM issues on Vercel, so we extract readable text directly
+      const text = buffer.toString("latin1");
+      // Extract text between BT and ET markers (PDF text blocks)
+      const matches = text.match(/BT[\s\S]*?ET/g) || [];
+      const extracted = matches
+        .join(" ")
+        .replace(/\(([^)]+)\)/g, "$1 ")
+        .replace(/[^\x20-\x7E\n]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (extracted.length > 50) return extracted.slice(0, 1500);
+      // Fallback: extract any readable ASCII text from PDF
+      const readable = text
+        .replace(/[^\x20-\x7E\n]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return readable.slice(0, 1500);
     }
     if (
       mimeType === "application/msword" ||
